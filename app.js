@@ -25,7 +25,6 @@ class App {
     this.setupFactors();
     this.setupNav();
     this.setupExport();
-    this.setupEmojiGame();
     this.updateApiStatus();
   }
 
@@ -480,6 +479,16 @@ class App {
     }
 
     el.innerHTML = html;
+  }
+
+  // ===== Emoji 游戏 =====
+  setupEmojiGame() {
+    document.getElementById('btnEmoji').addEventListener('click', () => {
+      const text = document.getElementById('userInput').value;
+      const url = 'emoji.html' + (text ? '?text=' + encodeURIComponent(text) : '');
+      window.open(url, '_blank');
+      audioSystem.play('click');
+    });
   }
 
   // ===== 导出 =====
