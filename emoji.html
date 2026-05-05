@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Emoji 合成器</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' text-anchor='middle' font-size='24'>🎨</text></svg>">
+<style>
+:root{--bg:#0a0a1a;--bg2:#10102a;--bg3:#181838;--border:rgba(139,92,246,0.15);--hover:rgba(139,92,246,0.35);--text:#e8e8f5;--text2:#8888aa;--purple:#8b5cf6;--pglow:rgba(139,92,246,0.25);--radius:12px}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+
+/* 顶栏 */
+.topbar{display:flex;gap:6px;padding:10px 12px;background:var(--bg2);border-bottom:1px solid var(--border);z-index:10}
+.topbar input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;color:var(--text);font-size:14px;outline:none;transition:border-color .2s}
+.topbar input:focus{border-color:var(--hover)}
+.topbar input::placeholder{color:var(--text2)}
+.topbar button{width:42px;height:42px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.topbar button:hover{border-color:var(--hover);background:var(--pglow)}
+
+/* 画布区 */
+.canvas-wrap{flex:1;position:relative;overflow:hidden}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none}
+.hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--text2);background:rgba(10,10,26,0.8);padding:6px 16px;border-radius:20px;pointer-events:none;white-space:nowrap;transition:opacity .3s}
+
+/* 底部面板 */
+.panel{background:var(--bg2);border-top:1px solid var(--border);display:flex;flex-direction:column;max-height:170px}
+.tabs{display:flex;overflow-x:auto;padding:8px 12px 0;gap:3px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:5px 11px;font-size:12px;color:var(--text2);cursor:pointer;border-radius:8px;transition:all .2s;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--purple);background:var(--pglow)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:3px;padding:8px 12px 10px;overflow-y:auto}
+.emoji-item{width:42px;height:42px;display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;border-radius:8px;transition:all .12s;user-select:none;-webkit-user-select:none}
+.emoji-item:hover{background:var(--bg3);transform:scale(1.18)}
+.emoji-item:active{transform:scale(0.92)}
+
+/* 返回链接 */
+.back-link{position:fixed;top:10px;right:10px;z-index:20;font-size:12px;color:var(--text2);text-decoration:none;padding:6px 12px;background:rgba(16,16,42,0.8);border:1px solid var(--border);border-radius:20px;transition:all .2s}
+.back-link:hover{color:var(--text);border-color:var(--hover)}
+
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@media(max-width:600px){.panel{max-height:200px}.grid{grid-template-columns:repeat(auto-fill,minmax(38px,1fr))}.emoji-item{width:38px;height:38px;font-size:22px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <input type="text" id="search" placeholder="输入关键词（如：熊猫、火箭、心）">
+    <button id="clearBtn" title="清空画布">🗑️</button>
+    <button id="randomBtn" title="随机生成">🎲</button>
+    <button id="exportBtn" title="导出 PNG">📷</button>
+  </div>
+  <div class="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div class="hint" id="hint">点击下方 Emoji 添加 · 拖拽移动 · 滚轮缩放 · 双击删除</div>
+  </div>
+  <div class="panel">
+    <div class="tabs" id="tabs"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+<a class="back-link" id="backLink" href="index.html">← 返回推演</a>
+
+<script>
+(function(){
+'use strict';
+
+/* ===== Emoji 数据 ===== */
+var CATS=['😀 表情','🐶 动物','🌸 自然','🍕 食物','❤️ 符号','🚀 物品'];
+var EMOJIS=[
+  ['😀','😂','🥰','😎','🤔','😢','😡','😱','🤩','😏','😴','🥳','🤯','🥺','😈','😇','😅','🤗','😤','🫠'],
+  ['🐶','🐱','🐼','🦊','🐰','🐻','🐸','🦁','🐯','🐮','🐷','🐵','🐧','🦄','🐙','🦋','🐝','🐢','🐬','🦈'],
+  ['🌸','🌻','🌹','🌈','☀️','🌙','⭐','🔥','💧','🌊','🌲','🌵','🍁','🍄','❄️','⚡','🌴','🌿','☁️','🌧️'],
+  ['🍎','🍕','🍔','🍦','🍩','🍰','🍺','☕','🍉','🥑','🍟','🧋','🍣','🥐','🧁','🍜','🍇','🍓','🥐','🌮'],
+  ['❤️','💛','💚','💙','💜','💔','✨','💯','⚡','🎯','🏆','👑','💎','🔮','🎪','🎵','💫','🔥','⭐','🌟'],
+  ['🚀','🎸','📷','💡','🎮','🎨','📚','🏠','💻','🎧','⏰','🔑','💰','🎁','🌍','🧩','🛸','🔭','🪄','🧪']
+];
+var ALL=EMOJIS.flat();
+
+var ZH={
+  '熊猫':'🐼','猫':'🐱','狗':'🐶','兔':'🐰','熊':'🐻','狐':'🦊','虎':'🐯','狮':'🦁','牛':'🐮','猪':'🐷',
+  '猴':'🐵','蛙':'🐸','鸡':'🐔','鸟':'🐦','鱼':'🐟','龙':'🐉','蛇':'🐍','马':'🐴','羊':'🐑','鼠':'🐭',
+  '龟':'🐢','蝴蝶':'🦋','蜜蜂':'🐝','企鹅':'🐧','鲸':'🐳','海豚':'🐬','鲨鱼':'🦈','螃蟹':'🦀','章鱼':'🐙','独角兽':'🦄',
+  '太阳':'☀️','月亮':'🌙','星':'⭐','火':'🔥','水':'💧','花':'🌸','树':'🌳','草':'🌿','山':'⛰️','海':'🌊',
+  '雨':'🌧️','雪':'❄️','云':'☁️','风':'🌪️','彩虹':'🌈','闪电':'⚡','玫瑰':'🌹','向日葵':'🌻','枫叶':'🍁','蘑菇':'🍄',
+  '笑':'😀','哭':'😢','怒':'😡','怕':'😱','惊':'😮','想':'🤔','累':'😴','爱':'😍','晕':'😵','冷':'😎',
+  '热':'🥵','开心':'😄','悲伤':'😭','恐惧':'😨','厌恶':'🤢','尴尬':'😅','星眼':'🤩','无辜':'🥺','生气':'😤','天使':'👼',
+  '苹果':'🍎','香蕉':'🍌','西瓜':'🍉','葡萄':'🍇','草莓':'🍓','桃':'🍑','樱桃':'🍒','柠檬':'🍋','橙':'🍊','梨':'🍐',
+  '菠萝':'🍍','椰子':'🥥','玉米':'🌽','胡萝卜':'🥕','辣椒':'🌶️','汉堡':'🍔','披萨':'🍕','薯条':'🍟','冰淇淋':'🍦','蛋糕':'🎂',
+  '咖啡':'☕','奶茶':'🧋','啤酒':'🍺','寿司':'🍣','面包':'🥐','饺子':'🥟','面条':'🍜','米饭':'🍚',
+  '心':'❤️','爱心':'💕','星星':'⭐','音乐':'🎵','钻石':'💎','皇冠':'👑','奖杯':'🏆','气球':'🎈','礼物':'🎁',
+  '火箭':'🚀','地球':'🌍','钱':'💰','相机':'📷','书':'📚','吉他':'🎸','游戏':'🎮','魔法':'🔮','炸弹':'💣',
+  '幽灵':'👻','外星人':'👽','机器人':'🤖','骷髅':'💀','炸弹':'💣',
+  '房子':'🏠','电脑':'💻','手机':'📱','耳机':'🎧','钥匙':'🔑','钟':'⏰','灯':'💡','伞':'☂️',
+  '汽车':'🚗','火车':'🚂','飞机':'✈️','船':'🚀','自行车':'🚲','摩托':'🏍️','卡车':'🚛',
+  '狗':'🐶','猫':'🐱','猪':'🐷','牛':'🐮','马':'🐴','鸡':'🐔','鸟':'🐦','鱼':'🐟','蛇':'🐍','龙':'🐉'
+};
+
+/* ===== 状态 ===== */
+var emojis=[],selectedId=null,dragging=false,dragS={x:0,y:0},emoS={x:0,y:0};
+var activeCat=0,dpr=window.devicePixelRatio||1;
+
+/* ===== DOM ===== */
+var canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+var searchEl=document.getElementById('search'),hintEl=document.getElementById('hint');
+var tabsEl=document.getElementById('tabs'),gridEl=document.getElementById('grid');
+
+/* ===== 初始化 ===== */
+function init(){
+  resize();
+  load();
+  renderTabs();
+  renderGrid();
+  bindEvents();
+  prePopulate();
+  render();
+  updateHint();
+}
+
+function resize(){
+  var w=canvas.parentElement;
+  dpr=window.devicePixelRatio||1;
+  canvas.width=w.clientWidth*dpr;
+  canvas.height=w.clientHeight*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+/* ===== 渲染 ===== */
+function render(){
+  var w=canvas.width/dpr,h=canvas.height/dpr;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#0a0a1a';
+  ctx.fillRect(0,0,w,h);
+  drawGrid(w,h);
+  emojis.forEach(function(e){
+    ctx.font=e.size+'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(e.char,e.x,e.y);
+  });
+  if(selectedId!==null){
+    var sel=null;
+    for(var i=0;i<emojis.length;i++){if(emojis[i].id===selectedId){sel=emojis[i];break;}}
+    if(sel)drawSel(sel);
+  }
+}
+
+function drawGrid(w,h){
+  ctx.strokeStyle='rgba(139,92,246,0.035)';ctx.lineWidth=1;
+  for(var x=0;x<w;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+  for(var y=0;y<h;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+}
+
+function drawSel(e){
+  var pad=6,half=e.size/2+pad;
+  ctx.strokeStyle='#8b5cf6';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+  ctx.strokeRect(e.x-half,e.y-half,half*2,half*2);
+  ctx.setLineDash([]);
+}
+
+/* ===== 事件 ===== */
+function bindEvents(){
+  canvas.addEventListener('mousedown',onMD);
+  canvas.addEventListener('mousemove',onMM);
+  canvas.addEventListener('mouseup',onMU);
+  canvas.addEventListener('dblclick',onDbl);
+  canvas.addEventListener('wheel',onWheel,{passive:false});
+  canvas.addEventListener('touchstart',onTS,{passive:false});
+  canvas.addEventListener('touchmove',onTM,{passive:false});
+  canvas.addEventListener('touchend',onTE);
+  searchEl.addEventListener('keydown',function(e){if(e.key==='Enter')doSearch();});
+  document.getElementById('randomBtn').addEventListener('click',doRandom);
+  document.getElementById('clearBtn').addEventListener('click',doClear);
+  document.getElementById('exportBtn').addEventListener('click',doExport);
+  window.addEventListener('resize',function(){resize();render();});
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Delete'||e.key==='Backspace'){if(selectedId!==null&&document.activeElement!==searchEl){delSel();e.preventDefault();}}
+    if(e.key==='Escape'){selectedId=null;render();}
+  });
+}
+
+function getPos(e){var r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
+function hitTest(x,y){for(var i=emojis.length-1;i>=0;i--){var e=emojis[i],h=e.size/2;if(Math.abs(x-e.x)<=h&&Math.abs(y-e.y)<=h)return i;}return-1;}
+
+function onMD(e){var p=getPos(e),i=hitTest(p.x,p.y);
+  if(i>=0){selectedId=emojis[i].id;dragging=true;dragS={x:p.x,y:p.y};emoS={x:emojis[i].x,y:emojis[i].y};}
+  else{selectedId=null;}
+  render();
+}
+function onMM(e){if(!dragging||selectedId===null)return;var p=getPos(e),em=findEm(selectedId);
+  if(em){em.x=emoS.x+(p.x-dragS.x);em.y=emoS.y+(p.y-dragS.y);render();}
+}
+function onMU(){if(dragging){dragging=false;save();}}
+function onDbl(e){var p=getPos(e),i=hitTest(p.x,p.y);if(i>=0){emojis.splice(i,1);selectedId=null;save();render();updateHint();}}
+function onWheel(e){e.preventDefault();if(selectedId===null)return;var em=findEm(selectedId);
+  if(em){em.size=Math.max(10,Math.min(200,em.size+(e.deltaY>0?-5:5)));save();render();}}
+
+var lastPinch=null;
+function onTS(e){e.preventDefault();
+  if(e.touches.length===1){var r=canvas.getBoundingClientRect(),x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top,i=hitTest(x,y);
+    if(i>=0){selectedId=emojis[i].id;dragging=true;dragS={x:x,y:y};emoS={x:emojis[i].x,y:emojis[i].y};}else{selectedId=null;}render();
+  }else if(e.touches.length===2){dragging=false;lastPinch=pinchD(e.touches);}
+}
+function onTM(e){e.preventDefault();
+  if(e.touches.length===1&&dragging&&selectedId!==null){var r=canvas.getBoundingClientRect(),x=e.touches[0].clientX-r.left,y=e.touches[0].clientY-r.top,em=findEm(selectedId);
+    if(em){em.x=emoS.x+(x-dragS.x);em.y=emoS.y+(y-dragS.y);render();}
+  }else if(e.touches.length===2&&selectedId!==null&&lastPinch!==null){var d=pinchD(e.touches),em=findEm(selectedId);
+    if(em){em.size=Math.max(10,Math.min(200,em.size+(d-lastPinch)*0.5));render();}lastPinch=d;}
+}
+function onTE(){dragging=false;lastPinch=null;save();}
+function pinchD(t){var dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.sqrt(dx*dx+dy*dy);}
+function findEm(id){for(var i=0;i<emojis.length;i++){if(emojis[i].id===id)return emojis[i];}return null;}
+
+/* ===== 操作 ===== */
+function addEmoji(ch,x,y){
+  var w=canvas.width/dpr,h=canvas.height/dpr;
+  emojis.push({id:Date.now()+Math.random(),char:ch,x:x!=null?x:w/2,y:y!=null?y:h/2,size:48});
+  selectedId=emojis[emojis.length-1].id;save();render();updateHint();
+}
+function delSel(){for(var i=0;i<emojis.length;i++){if(emojis[i].id===selectedId){emojis.splice(i,1);break;}}selectedId=null;save();render();updateHint();}
+
+/* ===== 搜索 ===== */
+function doSearch(){
+  var t=searchEl.value.trim();if(!t)return;
+  if(ZH[t]){addEmoji(ZH[t]);searchEl.value='';return;}
+  for(var k in ZH){if(t.indexOf(k)!==-1||k.indexOf(t)!==-1){addEmoji(ZH[k]);searchEl.value='';return;}}
+  searchEl.style.animation='shake .3s ease';setTimeout(function(){searchEl.style.animation='';},300);
+}
+
+/* ===== 随机 ===== */
+function doRandom(){
+  emojis=[];selectedId=null;
+  var fns=[randCircle,randHeart,randGrid,randSpiral];
+  fns[Math.floor(Math.random()*fns.length)]();
+  save();render();updateHint();
+}
+function pickN(n){var r=[];for(var i=0;i<n;i++)r.push(ALL[Math.floor(Math.random()*ALL.length)]);return r;}
+function randCircle(){var w=canvas.width/dpr,h=canvas.height/dpr,cx=w/2,cy=h/2,r=Math.min(cx,cy)*0.42,n=8+Math.floor(Math.random()*4),p=pickN(n+1);
+  for(var i=0;i<n;i++){var a=(i/n)*Math.PI*2-Math.PI/2;emojis.push({id:Date.now()+i,char:p[i],x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r,size:36+Math.random()*18});}
+  emojis.push({id:Date.now()+n,char:p[n],x:cx,y:cy,size:58+Math.random()*15});}
+function randHeart(){var w=canvas.width/dpr,h=canvas.height/dpr,cx=w/2,cy=h/2,s=Math.min(cx,cy)*0.022,n=14+Math.floor(Math.random()*5),p=pickN(n);
+  for(var i=0;i<n;i++){var t=(i/n)*Math.PI*2,x=16*Math.pow(Math.sin(t),3),y=-(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
+    emojis.push({id:Date.now()+i,char:p[i],x:cx+x*s*12,y:cy+y*s*12,size:30+Math.random()*14});}}
+function randGrid(){var w=canvas.width/dpr,h=canvas.height/dpr,cx=w/2,cy=h/2,c=3+Math.floor(Math.random()*2),r=3+Math.floor(Math.random()*2),sp=72,p=pickN(c*r),idx=0;
+  for(var ri=0;ri<r;ri++){for(var ci=0;ci<c;ci++){emojis.push({id:Date.now()+idx,char:p[idx],x:cx+(ci-(c-1)/2)*sp,y:cy+(ri-(r-1)/2)*sp,size:34+Math.random()*18});idx++;}}}
+function randSpiral(){var w=canvas.width/dpr,h=canvas.height/dpr,cx=w/2,cy=h/2,n=12+Math.floor(Math.random()*4),p=pickN(n);
+  for(var i=0;i<n;i++){var a=(i/n)*Math.PI*5,r=14+i*13;emojis.push({id:Date.now()+i,char:p[i],x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r,size:26+Math.random()*16});}}
+
+/* ===== 清空/导出 ===== */
+function doClear(){emojis=[];selectedId=null;save();render();updateHint();}
+function doExport(){var a=document.createElement('a');a.download='emoji-'+Date.now()+'.png';a.href=canvas.toDataURL('image/png');a.click();}
+
+/* ===== 存储 ===== */
+function save(){try{localStorage.setItem('emoji-synth',JSON.stringify(emojis));}catch(e){}}
+function load(){try{var d=localStorage.getItem('emoji-synth');if(d)emojis=JSON.parse(d);}catch(e){}}
+
+/* ===== UI ===== */
+function renderTabs(){
+  tabsEl.innerHTML=CATS.map(function(c,i){return'<div class="tab'+(i===activeCat?' active':'')+'" data-i="'+i+'">'+c+'</div>';}).join('');
+  tabsEl.querySelectorAll('.tab').forEach(function(t){t.onclick=function(){activeCat=+t.dataset.i;renderTabs();renderGrid();};});
+}
+function renderGrid(){
+  gridEl.innerHTML=EMOJIS[activeCat].map(function(e){return'<div class="emoji-item" data-e="'+e+'">'+e+'</div>';}).join('');
+  gridEl.querySelectorAll('.emoji-item').forEach(function(it){it.onclick=function(){addEmoji(it.dataset.e);};});
+}
+function updateHint(){hintEl.style.opacity=emojis.length===0?'1':'0';}
+
+/* ===== 预填充 ===== */
+function prePopulate(){
+  if(emojis.length>0)return;
+  var params=new URLSearchParams(location.search),text=params.get('text');
+  if(!text)return;
+  var matched=[];
+  for(var k in ZH){if(text.indexOf(k)!==-1&&matched.indexOf(ZH[k])===-1)matched.push(ZH[k]);}
+  if(!matched.length)matched.push('🤔','💭','🎯','💪','✨');
+  var w=canvas.width/dpr,h=canvas.height/dpr,cx=w/2,cy=h/2,r=Math.min(cx,cy)*0.32;
+  matched.forEach(function(ch,i){var a=(i/matched.length)*Math.PI*2-Math.PI/2;
+    emojis.push({id:Date.now()+i,char:ch,x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r,size:48});});
+  save();
+}
+
+/* ===== 启动 ===== */
+init();
+})();
+</script>
+</body>
+</html>

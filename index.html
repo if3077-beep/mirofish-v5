@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>未来推演 v5 · Three-Path Simulation</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' text-anchor='middle' font-size='24'>🔮</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="bgCanvas"></canvas>
+  <div class="bg-gradient"></div>
+
+  <!-- API 设置浮层 -->
+  <div id="apiOverlay" class="api-overlay">
+    <div class="api-modal">
+      <div class="api-modal-icon">🔑</div>
+      <h2>连接 AI 推演引擎</h2>
+      <p class="api-desc">输入 DeepSeek API Key 启用真实 AI 推演。<br>不填则使用本地模板推演。</p>
+      <div class="api-input-wrap">
+        <input type="password" id="apiKeyInput" placeholder="sk-..." class="api-input">
+        <button id="apiToggle" class="api-eye" title="显示/隐藏">👁</button>
+      </div>
+      <div class="api-actions">
+        <button id="apiSkip" class="btn-ghost">跳过，用本地推演</button>
+        <button id="apiSave" class="btn-glow">连接推演引擎</button>
+      </div>
+      <p class="api-hint">Key 仅存储在本地浏览器，不会上传到任何服务器。<br>免费注册：<a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a></p>
+    </div>
+  </div>
+
+  <div class="app">
+    <!-- ===== 输入阶段 ===== -->
+    <section id="phaseInput" class="phase active">
+      <div class="phase-inner">
+        <header class="header">
+          <div class="logo-mark">
+            <div class="logo-orb"></div>
+            <div class="logo-ring"></div>
+          </div>
+          <h1 class="title">
+            <span class="title-line">未来推演</span>
+            <span class="title-sub">告诉我你的处境，我用三条路径推演你的未来</span>
+          </h1>
+        </header>
+
+        <div class="daily-inspiration" id="dailyInspiration">
+          <div class="inspiration-icon">💡</div>
+          <div class="inspiration-text" id="inspirationText">加载中...</div>
+        </div>
+
+        <div class="scene-carousel">
+          <div class="scene-track" id="sceneTrack">
+            <button class="scene-card" data-text="我最近在纠结要不要跳槽，现在的工作稳定但没激情" data-mood="confused">
+              <div class="scene-icon">💼</div>
+              <div class="scene-title">职业十字路口</div>
+              <div class="scene-desc">稳定 vs 激情</div>
+            </button>
+            <button class="scene-card" data-text="和对象吵架了，冷战三天了，不知道该不该先低头" data-mood="sad">
+              <div class="scene-icon">💔</div>
+              <div class="scene-title">感情僵局</div>
+              <div class="scene-desc">冷战第三天</div>
+            </button>
+            <button class="scene-card" data-text="公司要裁员，人心惶惶，不知道自己安不安全" data-mood="anxious">
+              <div class="scene-icon">🏢</div>
+              <div class="scene-title">职场风暴</div>
+              <div class="scene-desc">裁员传闻四起</div>
+            </button>
+            <button class="scene-card" data-text="想创业，但不确定时机对不对，怕失败" data-mood="anxious">
+              <div class="scene-icon">🚀</div>
+              <div class="scene-title">创业抉择</div>
+              <div class="scene-desc">梦想 vs 现实</div>
+            </button>
+            <button class="scene-card" data-text="AI 技术发展太快了，感觉自己的技能要被淘汰了" data-mood="fearful">
+              <div class="scene-icon">🤖</div>
+              <div class="scene-title">AI 时代焦虑</div>
+              <div class="scene-desc">会被取代吗</div>
+            </button>
+            <button class="scene-card" data-text="投资的股票连续跌了一周，要不要割肉" data-mood="anxious">
+              <div class="scene-icon">📉</div>
+              <div class="scene-title">投资焦虑</div>
+              <div class="scene-desc">割肉还是坚守</div>
+            </button>
+            <button class="scene-card" data-text="孩子要高考了，全家压力都很大" data-mood="anxious">
+              <div class="scene-icon">📚</div>
+              <div class="scene-title">高考倒计时</div>
+              <div class="scene-desc">全家总动员</div>
+            </button>
+            <button class="scene-card" data-text="想搬家/换城市生活，但不确定新环境会怎样" data-mood="hopeful">
+              <div class="scene-icon">✈️</div>
+              <div class="scene-title">城市迁徙</div>
+              <div class="scene-desc">新城市新生活</div>
+            </button>
+            <button class="scene-card" data-text="身体检查出一些问题，很担心" data-mood="fearful">
+              <div class="scene-icon">❤️‍🩹</div>
+              <div class="scene-title">健康警报</div>
+              <div class="scene-desc">体检异常</div>
+            </button>
+            <button class="scene-card" data-text="想做自媒体副业，但不知道能不能做起来" data-mood="hopeful">
+              <div class="scene-icon">📱</div>
+              <div class="scene-title">副业探索</div>
+              <div class="scene-desc">第二曲线</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="input-container">
+          <div class="input-glow"></div>
+          <textarea id="userInput" placeholder="说说你的处境，越具体推演越精准..." rows="4"></textarea>
+          <div class="input-bar">
+            <div class="mood-mini" id="moodMini">
+              <button class="mood-chip" data-mood="anxious">😰 焦虑</button>
+              <button class="mood-chip" data-mood="angry">😤 愤怒</button>
+              <button class="mood-chip" data-mood="sad">😢 难过</button>
+              <button class="mood-chip" data-mood="confused">😵‍💫 迷茫</button>
+              <button class="mood-chip" data-mood="hopeful">🙂 期待</button>
+              <button class="mood-chip" data-mood="fearful">😨 恐惧</button>
+              <button class="mood-chip" data-mood="neutral">😐 平静</button>
+              <button class="mood-chip" data-mood="excited">🤩 兴奋</button>
+            </div>
+            <button id="btnNext" class="btn-glow" disabled>
+              <span>推演未来</span>
+              <div class="btn-shine"></div>
+            </button>
+          </div>
+        </div>
+
+        <div class="api-status" id="apiStatus">
+          <span class="api-dot"></span>
+          <span>本地推演模式</span>
+          <button id="btnApiSettings" class="btn-link">连接 AI</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 校准阶段 ===== -->
+    <section id="phaseCalibrate" class="phase">
+      <div class="phase-inner">
+        <div class="phase-nav">
+          <button id="btnBack" class="btn-ghost">← 返回</button>
+          <h2>校准推演参数</h2>
+          <div></div>
+        </div>
+
+        <div class="keyword-cloud" id="keywordCloud"></div>
+
+        <div class="slider-stack">
+          <div class="slider-row">
+            <div class="slider-info">
+              <span class="slider-label">影响范围</span>
+              <span class="slider-val" id="valScope">身边几个人</span>
+            </div>
+            <input type="range" id="slScope" min="1" max="5" value="2" class="range-slider">
+            <div class="slider-range"><span>仅自己</span><span>全社会</span></div>
+          </div>
+          <div class="slider-row">
+            <div class="slider-info">
+              <span class="slider-label">情绪强度</span>
+              <span class="slider-val" id="valIntensity">中等</span>
+            </div>
+            <input type="range" id="slIntensity" min="1" max="5" value="3" class="range-slider">
+            <div class="slider-range"><span>平静</span><span>激烈</span></div>
+          </div>
+          <div class="slider-row">
+            <div class="slider-info">
+              <span class="slider-label">时间跨度</span>
+              <span class="slider-val" id="valTime">一个月</span>
+            </div>
+            <input type="range" id="slTime" min="1" max="5" value="3" class="range-slider">
+            <div class="slider-range"><span>一周</span><span>一年</span></div>
+          </div>
+          <div class="slider-row">
+            <div class="slider-info">
+              <span class="slider-label">不确定性</span>
+              <span class="slider-val" id="valUncertainty">中等</span>
+            </div>
+            <input type="range" id="slUncertainty" min="1" max="5" value="3" class="range-slider">
+            <div class="slider-range"><span>确定</span><span>完全未知</span></div>
+          </div>
+        </div>
+
+        <div class="factors-wrap">
+          <p class="factors-title">还有哪些相关因素？</p>
+          <div class="factor-grid" id="factorGrid">
+            <button class="factor-chip" data-factor="media">📱 社交媒体放大</button>
+            <button class="factor-chip" data-factor="authority">🏛️ 权威介入</button>
+            <button class="factor-chip" data-factor="peer">👥 同辈压力</button>
+            <button class="factor-chip" data-factor="money">💰 经济因素</button>
+            <button class="factor-chip" data-factor="time">⏰ 时间紧迫</button>
+            <button class="factor-chip" data-factor="reputation">👤 面子/声誉</button>
+            <button class="factor-chip" data-factor="health">❤️ 健康相关</button>
+            <button class="factor-chip" data-factor="family">👨‍👩‍👧 家庭牵扯</button>
+          </div>
+        </div>
+
+        <div class="phase-footer">
+          <button id="btnStart" class="btn-glow large">
+            <span>🔮 开始三路径推演</span>
+            <div class="btn-shine"></div>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 推演阶段 ===== -->
+    <section id="phaseSimulate" class="phase">
+      <div class="phase-inner">
+        <div class="sim-bar">
+          <div class="sim-status">
+            <div class="pulse-dot"></div>
+            <span id="simLabel">推演中</span>
+          </div>
+          <div class="sim-engine" id="simEngine">DeepSeek AI</div>
+        </div>
+
+        <!-- 共鸣区 -->
+        <div class="empathy-section" id="empathySection">
+          <div class="empathy-icon">🤝</div>
+          <div class="empathy-text" id="empathyText"></div>
+        </div>
+
+        <!-- 推演进度 -->
+        <div class="sim-progress">
+          <div class="sim-progress-bar" id="simProgressBar"></div>
+        </div>
+        <div class="sim-steps" id="simSteps"></div>
+      </div>
+    </section>
+
+    <!-- ===== 结果阶段 ===== -->
+    <section id="phaseResult" class="phase">
+      <div class="phase-inner">
+        <!-- 共鸣总结 -->
+        <div class="result-empathy" id="resultEmpathy">
+          <div class="empathy-avatar">🔮</div>
+          <div class="empathy-bubble" id="empathyBubble"></div>
+        </div>
+
+        <!-- 三路径标题 -->
+        <div class="paths-header">
+          <h2 class="paths-title">三条推演路径</h2>
+          <p class="paths-sub">基于你的处境，以下是三种可能的走向</p>
+        </div>
+
+        <!-- 三路径卡片 -->
+        <div class="paths-grid" id="pathsGrid">
+          <!-- 乐观路径 -->
+          <div class="path-card path-optimistic">
+            <div class="path-header">
+              <div class="path-icon">🌅</div>
+              <h3 class="path-name">乐观路径</h3>
+              <div class="path-prob" id="probOptimistic"></div>
+            </div>
+            <div class="path-body" id="pathOptimistic"></div>
+          </div>
+
+          <!-- 中性路径 -->
+          <div class="path-card path-neutral">
+            <div class="path-header">
+              <div class="path-icon">🌊</div>
+              <h3 class="path-name">中性路径</h3>
+              <div class="path-prob" id="probNeutral"></div>
+            </div>
+            <div class="path-body" id="pathNeutral"></div>
+          </div>
+
+          <!-- 悲观路径 -->
+          <div class="path-card path-pessimistic">
+            <div class="path-header">
+              <div class="path-icon">🌧️</div>
+              <h3 class="path-name">悲观路径</h3>
+              <div class="path-prob" id="probPessimistic"></div>
+            </div>
+            <div class="path-body" id="pathPessimistic"></div>
+          </div>
+        </div>
+
+        <!-- 行动建议 -->
+        <div class="section-block">
+          <h3 class="section-title">行动建议</h3>
+          <div class="advice-list" id="adviceList"></div>
+        </div>
+
+        <!-- 心理学洞察 -->
+        <div class="section-block">
+          <h3 class="section-title">心理学洞察</h3>
+          <div class="insight-card" id="insightCard"></div>
+        </div>
+
+        <!-- 互动小游戏 -->
+        <div class="section-block">
+          <h3 class="section-title">互动一刻</h3>
+          <div class="emoji-game-card" id="emojiGameCard">
+            <div class="emoji-game-icon">🎨</div>
+            <div class="emoji-game-info">
+              <div class="emoji-game-title">Emoji 合成器</div>
+              <div class="emoji-game-desc">用 Emoji 表达你的心情，创作属于你的视觉贴纸</div>
+            </div>
+            <button id="btnEmoji" class="btn-ghost">打开</button>
+          </div>
+        </div>
+
+        <!-- 操作栏 -->
+        <div class="action-row">
+          <button id="btnExport" class="btn-ghost">📄 导出报告</button>
+          <button id="btnShare" class="btn-ghost">🔗 复制分享</button>
+          <button id="btnNew" class="btn-glow">🔮 新推演</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="engine.js"></script>
+  <script src="audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
