@@ -25,6 +25,7 @@ class App {
     this.setupFactors();
     this.setupNav();
     this.setupExport();
+    this.setupEmojiGame();
     this.updateApiStatus();
   }
 

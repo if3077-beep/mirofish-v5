@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emoji 合成器 · MiroFish</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='16' y='24' text-anchor='middle' font-size='24'>🎨</text></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0f;--bg2:#13131a;--bg3:#1a1a24;--border:#2a2a3a;--text:#e8e6f0;--text2:#9995b0;--accent:#8b5cf6;--accent2:#a78bfa;--radius:12px}
+body{background:var(--bg);color:var(--text);font-family:'Inter','Noto Sans SC',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+.app{max-width:480px;margin:0 auto;padding:16px;min-height:100vh;display:flex;flex-direction:column}
+.header{text-align:center;padding:20px 0 12px}
+.header h1{font-size:1.4rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:.82rem;color:var(--text2);margin-top:4px}
+.keyword-section{margin-bottom:12px}
+.keyword-input{display:flex;gap:8px}
+.keyword-input input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;color:var(--text);font-size:.9rem;outline:none;transition:border .2s}
+.keyword-input input:focus{border-color:var(--accent)}
+.keyword-input button{background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:0 18px;font-size:.85rem;font-weight:600;cursor:pointer;white-space:nowrap}
+.keyword-input button:active{transform:scale(.96)}
+.canvas-wrap{position:relative;flex:1;min-height:300px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+canvas.dragging{cursor:grabbing}
+.canvas-hint{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:.7rem;color:var(--text2);pointer-events:none;opacity:.6}
+.emoji-palette{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+.palette-tabs{display:flex;border-bottom:1px solid var(--border)}
+.palette-tab{flex:1;padding:8px;text-align:center;font-size:.75rem;color:var(--text2);cursor:pointer;transition:all .2s;border:none;background:none}
+.palette-tab.active{color:var(--accent);background:var(--bg3)}
+.palette-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding:8px;max-height:160px;overflow-y:auto}
+.emoji-btn{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:1.3rem;background:none;border:none;border-radius:6px;cursor:pointer;transition:all .15s}
+.emoji-btn:hover{background:var(--bg3);transform:scale(1.15)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions button{flex:1;min-width:0;padding:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);border-radius:var(--radius);font-size:.8rem;cursor:pointer;transition:all .2s}
+.actions button:hover{border-color:var(--accent);background:var(--bg3)}
+.actions .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.actions .btn-primary:hover{background:var(--accent2)}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--accent);color:#fff;padding:10px 24px;border-radius:20px;font-size:.85rem;opacity:0;transition:all .3s;pointer-events:none;z-index:100}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>Emoji 合成器</h1>
+    <p>输入关键词生成 Emoji 贴纸，拖拽编辑，双击删除</p>
+  </div>
+
+  <div class="keyword-section">
+    <div class="keyword-input">
+      <input type="text" id="keywordInput" placeholder="输入关键词，如：开心、工作、恋爱...">
+      <button id="btnGenerate">生成</button>
+      <button id="btnRandom" style="background:var(--bg3);color:var(--text)">随机</button>
+    </div>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div class="canvas-hint">拖拽移动 · 滚轮缩放 · 双击删除</div>
+  </div>
+
+  <div class="emoji-palette">
+    <div class="palette-tabs" id="paletteTabs"></div>
+    <div class="palette-grid" id="paletteGrid"></div>
+  </div>
+
+  <div class="actions">
+    <button id="btnClear">清空</button>
+    <button id="btnUndo">撤销</button>
+    <button id="btnExport" class="btn-primary">导出 PNG</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CATEGORIES = [
+  { name: '表情', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','🥲','😋'] },
+  { name: '手势', emojis: ['👍','👎','👏','🙌','🤝','✌️','🤞','🫰','🤟','🤘','👌','🤌','🤏','👈','👉','👆','👇','☝️','✋','🤚'] },
+  { name: '爱心', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❤️‍🔥','❤️‍🩹','💕','💞','💓','💗','💖','💘','💝','💟'] },
+  { name: '自然', emojis: ['🌸','🌺','🌻','🌹','🌷','💐','🌿','☘️','🍀','🍁','🍂','🌾','🌵','🌴','🌳','🌊','⭐','🌙','☀️','🌈'] },
+  { name: '物品', emojis: ['🎯','🎮','🎲','🧩','🎭','🎪','🎨','🎬','🎤','🎧','🎸','🎹','🎺','🎻','🪘','📚','📖','✏️','💡','🔔'] },
+  { name: '食物', emojis: ['🍕','🍔','🍟','🌭','🍿','🧁','🍰','🎂','🍩','🍪','🍫','🍬','🍭','☕','🍵','🧋','🥤','🍺','🍷','🥂'] },
+];
+
+const KEYWORD_MAP = {
+  '开心':'😀','快乐':'😄','高兴':'😁','笑':'😆','欢乐':'🤣','幸福':'🥰','愉快':'😊',
+  '难过':'😢','伤心':'💔','哭':'😭','悲伤':'😞','沮丧':'😔','痛苦':'😫',
+  '生气':'😤','愤怒':'😡','讨厌':'😠','烦':'😩','暴躁':'🤬',
+  '爱':'❤️','喜欢':'😍','恋爱':'💕','浪漫':'🌹','心动':'💓','暗恋':'🥰','心动':'💘',
+  '工作':'💼','加班':'🖥️','开会':'📋','上班':'🏢','打工':'🔨','升职':'📈','加薪':'💰',
+  '学习':'📚','考试':'📝','读书':'📖','毕业':'🎓','知识':'💡',
+  '钱':'💰','工资':'💵','投资':'📈','理财':'💹','穷':'😅','富有':'🤑','买房':'🏠',
+  '吃':'😋','美食':'🍕','喝':'☕','饿':'🤤','零食':'🍿','大餐':'🥘',
+  '睡觉':'😴','困':'😪','失眠':'🥱','梦':'💭','休息':'🛌',
+  '旅行':'✈️','旅游':'🏖️','出差':'🧳','飞':'🛫',
+  '健康':'💪','运动':'🏃','减肥':'🏋️','健身':'💯','瑜伽':'🧘',
+  '朋友':'🤝','社交':'👥','聚会':'🎉','友情':'🫂',
+  '家庭':'👨‍👩‍👧','父母':'👪','孩子':'👶','家人':'❤️','亲情':'🫶',
+  '焦虑':'😰','紧张':'😬','压力':'😩','担心':'😟','害怕':'😨','恐惧':'😱',
+  '期待':'🤩','希望':'🌟','梦想':'✨','目标':'🎯','未来':'🔮',
+  '孤独':'🥺','寂寞':'😿','无聊':'😐','迷茫':'😵‍💫',
+  '成功':'🏆','胜利':'✌️','完成':'✅','挑战':'⚡',
+  '失败':'😞','挫折':'⛈️','困难':'🧗','问题':'❓',
+  '科技':'🤖','AI':'🧠','编程':'💻','代码':'⌨️','互联网':'🌐',
+  '音乐':'🎵','唱歌':'🎤','跳舞':'💃','演奏':'🎸',
+  '天气':'🌤️','下雨':'🌧️','晴天':'☀️','雪':'❄️','风':'💨',
+  '生日':'🎂','礼物':'🎁','庆祝':'🎊','节日':'🎄',
+  '时间':'⏰','快':'⏩','慢':'⏳','等待':'🕰️','抓紧':'⏱️',
+  '电影':'🎬','电视':'📺','游戏':'🎮','综艺':'🎪',
+  '宠物':'🐱','猫':'🐱','狗':'🐶','动物':'🐾',
+  '咖啡':'☕','茶':'🍵','奶茶':'🧋','酒':'🍷','啤酒':'🍺','干杯':'🥂',
+  '花':'🌸','樱花':'🌸','玫瑰':'🌹','向日葵':'🌻',
+  '星星':'⭐','月亮':'🌙','太阳':'☀️','宇宙':'🌌','银河':'🌌',
+  '创业':'🚀','副业':'📱','自媒体':'📹','直播':'📺',
+  '高考':'📝','志愿':'📋','成绩':'📊','录取':'🎓',
+  '体检':'🏥','生病':'🤒','药':'💊','康复':'💪',
+  '分手':'💔','冷战':'🥶','吵架':'💢','和好':'🫶','道歉':'🙇',
+  '房子':'🏠','搬家':'📦','装修':'🔨','租房':'🏢',
+  '面试':'🤝','简历':'📄','offer':'🎉','入职':'💼',
+};
+
+let emojis = [];
+let nextId = 0;
+let selectedId = null;
+let dragState = null;
+let history = [];
+let activeCategory = 0;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const paletteTabs = document.getElementById('paletteTabs');
+const paletteGrid = document.getElementById('paletteGrid');
+const keywordInput = document.getElementById('keywordInput');
+const toastEl = document.getElementById('toast');
+
+function init() {
+  resizeCanvas();
+  buildPalette();
+  loadState();
+  const params = new URLSearchParams(location.search);
+  if (params.get('text')) {
+    keywordInput.value = params.get('text');
+    generateFromKeyword(params.get('text'));
+  }
+  bindEvents();
+  draw();
+}
+
+function resizeCanvas() {
+  const wrap = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = wrap.clientWidth * dpr;
+  canvas.height = wrap.clientHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  canvas.style.width = wrap.clientWidth + 'px';
+  canvas.style.height = wrap.clientHeight + 'px';
+}
+
+function buildPalette() {
+  CATEGORIES.forEach((cat, i) => {
+    const tab = document.createElement('button');
+    tab.className = 'palette-tab' + (i === 0 ? ' active' : '');
+    tab.textContent = cat.name;
+    tab.onclick = () => switchCategory(i);
+    paletteTabs.appendChild(tab);
+  });
+  renderGrid(0);
+}
+
+function switchCategory(i) {
+  activeCategory = i;
+  document.querySelectorAll('.palette-tab').forEach((t, idx) => t.classList.toggle('active', idx === i));
+  renderGrid(i);
+}
+
+function renderGrid(i) {
+  paletteGrid.innerHTML = '';
+  CATEGORIES[i].emojis.forEach(char => {
+    const btn = document.createElement('button');
+    btn.className = 'emoji-btn';
+    btn.textContent = char;
+    btn.onclick = () => addEmoji(char);
+    paletteGrid.appendChild(btn);
+  });
+}
+
+function addEmoji(char, x, y, size) {
+  const cw = canvas.width / (window.devicePixelRatio || 1);
+  const ch = canvas.height / (window.devicePixelRatio || 1);
+  pushHistory();
+  emojis.push({
+    id: nextId++,
+    char,
+    x: x ?? cw / 2 + (Math.random() - 0.5) * 100,
+    y: y ?? ch / 2 + (Math.random() - 0.5) * 100,
+    size: size || 40
+  });
+  saveState();
+  draw();
+}
+
+function pushHistory() {
+  history.push(JSON.stringify(emojis));
+  if (history.length > 30) history.shift();
+}
+
+function draw() {
+  const w = canvas.width / (window.devicePixelRatio || 1);
+  const h = canvas.height / (window.devicePixelRatio || 1);
+  ctx.clearRect(0, 0, w, h);
+
+  // grid dots
+  ctx.fillStyle = 'rgba(139,92,246,0.04)';
+  for (let x = 0; x < w; x += 20) {
+    for (let y = 0; y < h; y += 20) {
+      ctx.beginPath();
+      ctx.arc(x, y, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  emojis.forEach(e => {
+    ctx.font = `${e.size}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(e.char, e.x, e.y);
+
+    if (e.id === selectedId) {
+      ctx.strokeStyle = 'rgba(139,92,246,0.7)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      const m = ctx.measureText(e.char);
+      const hw = (m.width || e.size) / 2 + 6;
+      const hh = e.size / 2 + 6;
+      ctx.strokeRect(e.x - hw, e.y - hh, hw * 2, hh * 2);
+      ctx.setLineDash([]);
+    }
+  });
+}
+
+function hitTest(mx, my) {
+  for (let i = emojis.length - 1; i >= 0; i--) {
+    const e = emojis[i];
+    ctx.font = `${e.size}px serif`;
+    const m = ctx.measureText(e.char);
+    const hw = (m.width || e.size) / 2;
+    const hh = e.size / 2;
+    if (mx >= e.x - hw && mx <= e.x + hw && my >= e.y - hh && my <= e.y + hh) return e;
+  }
+  return null;
+}
+
+function getPos(ev) {
+  const rect = canvas.getBoundingClientRect();
+  if (ev.touches) return { x: ev.touches[0].clientX - rect.left, y: ev.touches[0].clientY - rect.top };
+  return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+}
+
+function generateFromKeyword(text) {
+  pushHistory();
+  emojis = [];
+  const chars = text.split('');
+  const found = [];
+  // match longer keywords first
+  const keys = Object.keys(KEYWORD_MAP).sort((a, b) => b.length - a.length);
+  let remaining = text;
+  for (const k of keys) {
+    const idx = remaining.indexOf(k);
+    if (idx !== -1) {
+      found.push(KEYWORD_MAP[k]);
+      remaining = remaining.replace(k, '');
+    }
+  }
+  if (found.length === 0) {
+    // single char match
+    for (const c of chars) {
+      if (KEYWORD_MAP[c]) found.push(KEYWORD_MAP[c]);
+    }
+  }
+  if (found.length === 0) {
+    // random selection
+    for (let i = 0; i < 5; i++) {
+      const cat = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+      found.push(cat.emojis[Math.floor(Math.random() * cat.emojis.length)]);
+    }
+  }
+  // layout pattern
+  const patterns = ['circle', 'heart', 'grid', 'spiral'];
+  const pat = patterns[Math.floor(Math.random() * patterns.length)];
+  const cw = canvas.width / (window.devicePixelRatio || 1);
+  const ch = canvas.height / (window.devicePixelRatio || 1);
+  const cx = cw / 2, cy = ch / 2;
+  const n = found.length;
+
+  if (pat === 'circle') {
+    const r = Math.min(cw, ch) * 0.3;
+    found.forEach((char, i) => {
+      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      addEmoji(char, cx + Math.cos(a) * r, cy + Math.sin(a) * r, 36);
+    });
+  } else if (pat === 'heart') {
+    found.forEach((char, i) => {
+      const t = (i / n) * Math.PI * 2;
+      const hx = 16 * Math.pow(Math.sin(t), 3);
+      const hy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+      addEmoji(char, cx + hx * 8, cy + hy * 8, 34);
+    });
+  } else if (pat === 'grid') {
+    const cols = Math.ceil(Math.sqrt(n));
+    const spacing = 50;
+    found.forEach((char, i) => {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const ox = (col - (cols - 1) / 2) * spacing;
+      const oy = (row - (Math.ceil(n / cols) - 1) / 2) * spacing;
+      addEmoji(char, cx + ox, cy + oy, 38);
+    });
+  } else {
+    found.forEach((char, i) => {
+      const a = i * 0.8;
+      const r = 20 + i * 14;
+      addEmoji(char, cx + Math.cos(a) * r, cy + Math.sin(a) * r, 30 + i * 2);
+    });
+  }
+  saveState();
+  toast(`已生成 ${found.length} 个 Emoji`);
+}
+
+function randomGenerate() {
+  const count = 6 + Math.floor(Math.random() * 6);
+  let chars = [];
+  for (let i = 0; i < count; i++) {
+    const cat = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+    chars.push(cat.emojis[Math.floor(Math.random() * cat.emojis.length)]);
+  }
+  pushHistory();
+  emojis = [];
+  const patterns = ['circle', 'heart', 'grid', 'spiral'];
+  const pat = patterns[Math.floor(Math.random() * patterns.length)];
+  const cw = canvas.width / (window.devicePixelRatio || 1);
+  const ch = canvas.height / (window.devicePixelRatio || 1);
+  const cx = cw / 2, cy = ch / 2;
+  const n = chars.length;
+
+  if (pat === 'circle') {
+    const r = Math.min(cw, ch) * 0.3;
+    chars.forEach((char, i) => {
+      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      addEmoji(char, cx + Math.cos(a) * r, cy + Math.sin(a) * r, 36);
+    });
+  } else if (pat === 'heart') {
+    chars.forEach((char, i) => {
+      const t = (i / n) * Math.PI * 2;
+      const hx = 16 * Math.pow(Math.sin(t), 3);
+      const hy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+      addEmoji(char, cx + hx * 8, cy + hy * 8, 34);
+    });
+  } else if (pat === 'grid') {
+    const cols = Math.ceil(Math.sqrt(n));
+    const spacing = 50;
+    chars.forEach((char, i) => {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      addEmoji(char, cx + (col - (cols - 1) / 2) * spacing, cy + (row - (Math.ceil(n / cols) - 1) / 2) * spacing, 38);
+    });
+  } else {
+    chars.forEach((char, i) => {
+      addEmoji(char, cx + Math.cos(i * 0.8) * (20 + i * 14), cy + Math.sin(i * 0.8) * (20 + i * 14), 30 + i * 2);
+    });
+  }
+  saveState();
+}
+
+function saveState() {
+  try { localStorage.setItem('mf_emoji_state', JSON.stringify(emojis)); } catch (e) {}
+}
+
+function loadState() {
+  try {
+    const s = localStorage.getItem('mf_emoji_state');
+    if (s) {
+      emojis = JSON.parse(s);
+      nextId = emojis.reduce((m, e) => Math.max(m, e.id), 0) + 1;
+      draw();
+    }
+  } catch (e) {}
+}
+
+function exportPNG() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.width;
+  const h = canvas.height;
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = w;
+  tmpCanvas.height = h;
+  const tmpCtx = tmpCanvas.getContext('2d');
+  tmpCtx.fillStyle = '#13131a';
+  tmpCtx.fillRect(0, 0, w, h);
+  emojis.forEach(e => {
+    tmpCtx.font = `${e.size * dpr}px serif`;
+    tmpCtx.textAlign = 'center';
+    tmpCtx.textBaseline = 'middle';
+    tmpCtx.fillText(e.char, e.x * dpr, e.y * dpr);
+  });
+  const url = tmpCanvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `emoji-sticker-${Date.now()}.png`;
+  a.click();
+  toast('已导出 PNG');
+}
+
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(() => toastEl.classList.remove('show'), 2000);
+}
+
+function bindEvents() {
+  // mouse
+  canvas.addEventListener('mousedown', ev => {
+    const p = getPos(ev);
+    const hit = hitTest(p.x, p.y);
+    if (hit) {
+      selectedId = hit.id;
+      dragState = { id: hit.id, ox: p.x - hit.x, oy: p.y - hit.y };
+      canvas.classList.add('dragging');
+    } else {
+      selectedId = null;
+    }
+    draw();
+  });
+  canvas.addEventListener('mousemove', ev => {
+    if (!dragState) return;
+    const p = getPos(ev);
+    const e = emojis.find(e => e.id === dragState.id);
+    if (e) { e.x = p.x - dragState.ox; e.y = p.y - dragState.oy; draw(); }
+  });
+  canvas.addEventListener('mouseup', () => {
+    if (dragState) { dragState = null; canvas.classList.remove('dragging'); saveState(); }
+  });
+  canvas.addEventListener('dblclick', ev => {
+    const p = getPos(ev);
+    const hit = hitTest(p.x, p.y);
+    if (hit) {
+      pushHistory();
+      emojis = emojis.filter(e => e.id !== hit.id);
+      selectedId = null;
+      saveState();
+      draw();
+    }
+  });
+  canvas.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    const p = getPos(ev);
+    const hit = hitTest(p.x, p.y);
+    if (hit) {
+      hit.size = Math.max(12, Math.min(120, hit.size + (ev.deltaY < 0 ? 3 : -3)));
+      saveState();
+      draw();
+    }
+  }, { passive: false });
+
+  // touch
+  let touchDist = 0;
+  canvas.addEventListener('touchstart', ev => {
+    if (ev.touches.length === 1) {
+      const p = getPos(ev);
+      const hit = hitTest(p.x, p.y);
+      if (hit) {
+        selectedId = hit.id;
+        dragState = { id: hit.id, ox: p.x - hit.x, oy: p.y - hit.y };
+      }
+    } else if (ev.touches.length === 2) {
+      const dx = ev.touches[0].clientX - ev.touches[1].clientX;
+      const dy = ev.touches[0].clientY - ev.touches[1].clientY;
+      touchDist = Math.sqrt(dx * dx + dy * dy);
+    }
+    draw();
+  }, { passive: true });
+  canvas.addEventListener('touchmove', ev => {
+    ev.preventDefault();
+    if (ev.touches.length === 1 && dragState) {
+      const p = getPos(ev);
+      const e = emojis.find(e => e.id === dragState.id);
+      if (e) { e.x = p.x - dragState.ox; e.y = p.y - dragState.oy; draw(); }
+    } else if (ev.touches.length === 2 && selectedId != null) {
+      const dx = ev.touches[0].clientX - ev.touches[1].clientX;
+      const dy = ev.touches[0].clientY - ev.touches[1].clientY;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const e = emojis.find(e => e.id === selectedId);
+      if (e) {
+        e.size = Math.max(12, Math.min(120, e.size + (d - touchDist) * 0.2));
+        touchDist = d;
+        draw();
+      }
+    }
+  }, { passive: false });
+  canvas.addEventListener('touchend', () => {
+    dragState = null;
+    saveState();
+  });
+
+  // keyboard
+  document.addEventListener('keydown', ev => {
+    if (ev.key === 'Delete' || ev.key === 'Backspace') {
+      if (selectedId != null && document.activeElement !== keywordInput) {
+        pushHistory();
+        emojis = emojis.filter(e => e.id !== selectedId);
+        selectedId = null;
+        saveState();
+        draw();
+      }
+    }
+    if (ev.key === 'Escape') { selectedId = null; draw(); }
+  });
+
+  // buttons
+  document.getElementById('btnGenerate').onclick = () => {
+    const t = keywordInput.value.trim();
+    if (t) generateFromKeyword(t);
+  };
+  keywordInput.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') {
+      const t = keywordInput.value.trim();
+      if (t) generateFromKeyword(t);
+    }
+  });
+  document.getElementById('btnRandom').onclick = randomGenerate;
+  document.getElementById('btnClear').onclick = () => {
+    pushHistory();
+    emojis = [];
+    selectedId = null;
+    saveState();
+    draw();
+  };
+  document.getElementById('btnUndo').onclick = () => {
+    if (history.length) {
+      emojis = JSON.parse(history.pop());
+      nextId = emojis.reduce((m, e) => Math.max(m, e.id), 0) + 1;
+      selectedId = null;
+      saveState();
+      draw();
+    }
+  };
+  document.getElementById('btnExport').onclick = exportPNG;
+
+  window.addEventListener('resize', () => { resizeCanvas(); draw(); });
+}
+
+init();
+</script>
+</body>
+</html>
